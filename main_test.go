@@ -138,6 +138,45 @@ func TestInvalidMessage(t *testing.T) {
 	sanitySetupProveVerifyHelper(t, &circuit, &assignment, false)
 }
 
+// Test that an invalid signature for valid message does not verify.
+func TestInvalidSignature(t *testing.T) {
+	signatureCurve := cryptotwistededwards.BN254
+	hasher := cryptohash.MIMC_BN254
+	signer, err := cryptoeddsa.New(signatureCurve, rand.Reader)
+	if err != nil {
+		t.Fatal("failed to create signer", err)
+	}
+
+	msg := []byte("hello world")
+	signature, err := signer.Sign(msg, hasher.New())
+	if err != nil {
+		t.Fatal("failed to sign message", err)
+	}
+
+	pub := signer.Public()
+	checkSig, err := pub.Verify(signature, msg, hasher.New())
+	if err != nil {
+		t.Fatal("failed to verify signature", err)
+	}
+	if !checkSig {
+		t.Fatal("signature verification failed")
+	}
+
+	circuit := EdDSAVerifCircuit{
+		curveID: signatureCurve,
+	}
+	assignment := EdDSAVerifCircuit{
+		Message: msg,
+	}
+	assignment.PublicKey.Assign(signatureCurve, pub.Bytes())
+	assignment.Signature.Assign(signatureCurve, signature)
+	// break signature
+	assignment.Signature.S = 10
+
+	sanitySetupProveVerifyHelper(t, &circuit, &assignment, false)
+
+}
+
 func sanitySetupProveVerifyHelper(t *testing.T, circuit, assignment frontend.Circuit, shouldSucceed bool) {
 	t.Helper()
 	// we need to match the curve used in the circuit
